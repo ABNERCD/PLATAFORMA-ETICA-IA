@@ -1,59 +1,33 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors'; // ¡Importante para conectar frontend y backend!
+import { testConnection } from './config/database.js'; // Importa la prueba de conexión
+
+// Importar tus rutas
+import authRoutes from './routes/authRoutes.js';
+import courseRoutes from './routes/courseRoutes.js'; // (Cuando las tengas)
+
+// Cargar variables de entorno
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3001; // Elige un puerto para el backend
 
-// Middleware
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
-}));
+// --- Middlewares Esenciales ---
+
+// 1. CORS: Permite que tu frontend (en localhost:5173) hable con tu backend (en localhost:3001)
+app.use(cors()); 
+
+// 2. Express JSON: Permite que el backend entienda los JSON que envía el frontend
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Rutas
-const authRoutes = require('./routes/auth');
-const courseRoutes = require('./routes/courses');
-
+// --- Rutas de tu API ---
 app.use('/api/auth', authRoutes);
 app.use('/api/courses', courseRoutes);
 
-// Ruta de prueba
-app.get('/api', (req, res) => {
-  res.json({ 
-    success: true, 
-    message: '🚀 API de Plataforma Ética en IA funcionando correctamente',
-    version: '1.0.0'
-  });
-});
-
-// Manejo de rutas no encontradas
-app.use((req, res) => {
-  res.status(404).json({ 
-    success: false, 
-    message: 'Ruta no encontrada' 
-  });
-});
-
-// Manejo de errores
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ 
-    success: false, 
-    message: 'Error interno del servidor' 
-  });
-});
-
-// Iniciar servidor
+// Iniciar el servidor
 app.listen(PORT, () => {
-  console.log(`
-╔════════════════════════════════════════════╗
-║  🚀 Servidor Backend Iniciado             ║
-║  📡 Puerto: ${PORT}                         ║
-║  🌐 URL: http://localhost:${PORT}          ║
-║  📚 API Docs: http://localhost:${PORT}/api ║
-╚════════════════════════════════════════════╝
-  `);
+  console.log(`🚀 Servidor de backend corriendo en http://localhost:${PORT}`);
+  // Probar la conexión a la BD al iniciar
+  testConnection();
 });

@@ -1,193 +1,103 @@
-const db = require('../config/database');
+import pool from '../config/database.js';
 
-// Obtener todos los cursos
-exports.getAllCourses = async (req, res) => {
+// 1. Crear un nuevo curso
+export const createCourse = async (req, res) => {
+  const { titulo, descripcion } = req.body;
+  // Gracias al middleware 'protect', ya tenemos 'req.user'
+  const instructor_id = req.user.usuario_id;
+
   try {
-    const [courses] = await db.query(
-      'SELECT * FROM cursos ORDER BY id ASC'
+    const [result] = await pool.query(
+      'INSERT INTO cursos (titulo, descripcion, instructor_id) VALUES (?, ?, ?)',
+      [titulo, descripcion, instructor_id]
     );
-
-    res.json({
-      success: true,
-      courses
-    });
-
-  } catch (error) {
-    console.error('Error al obtener cursos:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
-  }
-};
-
-// Obtener un curso específico
-exports.getCourseById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const [courses] = await db.query(
-      'SELECT * FROM cursos WHERE id = ?',
-      [id]
-    );
-
-    if (courses.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Curso no encontrado' 
-      });
-    }
-
-    res.json({
-      success: true,
-      course: courses[0]
-    });
-
-  } catch (error) {
-    console.error('Error al obtener curso:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
-  }
-};
-
-// Obtener progreso del usuario en cursos
-exports.getUserProgress = async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    const [progress] = await db.query(`
-      SELECT 
-        p.*,
-        c.titulo,
-        c.descripcion,
-        c.duracion,
-        c.nivel
-      FROM progreso_usuario p
-      INNER JOIN cursos c ON p.curso_id = c.id
-      WHERE p.usuario_id = ?
-      ORDER BY p.fecha_inicio DESC
-    `, [userId]);
-
-    res.json({
-      success: true,
-      progress
-    });
-
-  } catch (error) {
-    console.error('Error al obtener progreso:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
-  }
-};
-
-// Iniciar un curso (registrar progreso)
-exports.startCourse = async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { cursoId } = req.body;
-
-    // Verificar si ya existe el registro
-    const [existing] = await db.query(
-      'SELECT id FROM progreso_usuario WHERE usuario_id = ? AND curso_id = ?',
-      [userId, cursoId]
-    );
-
-    if (existing.length > 0) {
-      return res.json({
-        success: true,
-        message: 'Ya has iniciado este curso',
-        progressId: existing[0].id
-      });
-    }
-
-    // Crear registro de progreso
-    const [result] = await db.query(
-      'INSERT INTO progreso_usuario (usuario_id, curso_id) VALUES (?, ?)',
-      [userId, cursoId]
-    );
-
-    res.json({
-      success: true,
-      message: 'Curso iniciado',
-      progressId: result.insertId
-    });
-
-  } catch (error) {
-    console.error('Error al iniciar curso:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
-  }
-};
-
-// Actualizar progreso de un curso
-exports.updateProgress = async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { cursoId, progreso } = req.body;
-
-    // Actualizar progreso
-    await db.query(
-      `UPDATE progreso_usuario 
-       SET progreso_porcentaje = ?,
-           fecha_completado = IF(? >= 100, NOW(), NULL)
-       WHERE usuario_id = ? AND curso_id = ?`,
-      [progreso, progreso, userId, cursoId]
-    );
-
-    res.json({
-      success: true,
-      message: 'Progreso actualizado'
-    });
-
-  } catch (error) {
-    console.error('Error al actualizar progreso:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
-  }
-};
-
-// Obtener estadísticas del usuario
-exports.getUserStats = async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    // Total de cursos
-    const [totalCourses] = await db.query('SELECT COUNT(*) as total FROM cursos');
     
-    // Cursos completados
-    const [completedCourses] = await db.query(
-      'SELECT COUNT(*) as total FROM progreso_usuario WHERE usuario_id = ? AND progreso_porcentaje = 100',
-      [userId]
-    );
+    res.status(201).json({ 
+      success: true, 
+      message: 'Curso creado con éxito',
+      curso_id: result.insertId 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error al crear el curso' });
+  }
+};
 
-    // Progreso promedio
-    const [avgProgress] = await db.query(
-      'SELECT AVG(progreso_porcentaje) as promedio FROM progreso_usuario WHERE usuario_id = ?',
-      [userId]
-    );
+// 2. Añadir una lección a un curso
+export const addLesson = async (req, res) => {
+  const { curso_id } = req.params;
+  const { titulo, tipo, contenido_texto } = req.body;
 
-    res.json({
+  try {
+    let contenidoFinal = '';
+    
+    if (tipo === 'video') {
+      // Si es video, guardamos la URL (ej. de YouTube) que vino en el body
+      contenidoFinal = contenido_texto;
+    } else if (tipo === 'archivo' && req.file) {
+      // Si es archivo, guardamos la ruta del archivo que subió multer
+      // Hacemos la ruta accesible, ej: '/uploads/archivo-1234.pdf'
+      contenidoFinal = `/${req.file.path}`; 
+    } else if (tipo === 'texto') {
+      // Si es solo texto
+      contenidoFinal = contenido_texto;
+    }
+
+    const [result] = await pool.query(
+      'INSERT INTO lecciones (curso_id, titulo, contenido, tipo) VALUES (?, ?, ?, ?)',
+      [curso_id, titulo, contenidoFinal, tipo] // Asumo que añadiste la columna 'tipo'
+    );
+    
+    res.status(201).json({
       success: true,
-      stats: {
-        totalCursos: totalCourses[0].total,
-        cursosCompletados: completedCourses[0].total,
-        progresoPromedio: Math.round(avgProgress[0].promedio || 0)
-      }
+      message: 'Lección añadida con éxito',
+      leccion_id: result.insertId
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error al añadir lección' });
+  }
+};
+
+// 3. Obtener todos los cursos
+export const getAllCourses = async (req, res) => {
+  try {
+    const [cursos] = await pool.query(
+      'SELECT c.curso_id, c.titulo, c.descripcion, u.nombre AS instructor FROM cursos c JOIN usuarios u ON c.instructor_id = u.usuario_id WHERE c.publicado = 1'
+    );
+    res.json(cursos);
+  } catch (error) {
+    res.status(500).json({ message: 'Error del servidor' });
+  }
+};
+// 4. Inscribir un usuario (estudiante) a un curso
+export const enrollInCourse = async (req, res) => {
+  try {
+    // Obtenemos el ID del curso desde los parámetros de la URL
+    const { curso_id } = req.params;
+    
+    // Obtenemos el ID del usuario (estudiante) desde el token (gracias al middleware 'protect')
+    const { usuario_id } = req.user;
+
+    // Insertamos el nuevo registro en la tabla pivote 'inscripciones'
+    const [result] = await pool.query(
+      'INSERT INTO inscripciones (usuario_id, curso_id) VALUES (?, ?)',
+      [usuario_id, curso_id]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: '¡Inscripción exitosa!',
+      inscripcion_id: result.insertId
     });
 
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
+    // Manejamos el error más común: "ya estás inscrito"
+    if (error.code === 'ER_DUP_ENTRY') { // ER_DUP_ENTRY (código 1062) es por la restricción UNIQUE
+      return res.status(400).json({ success: false, message: 'Ya estás inscrito en este curso.' });
+    }
+    
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error en el servidor al inscribirse.' });
   }
 };

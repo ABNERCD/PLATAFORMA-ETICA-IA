@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, LogOut, BookOpen, Award, TrendingUp, User } from 'lucide-react';
-import { courseService } from '../services/api';
+import { 
+  Shield, LogOut, BookOpen, Award, TrendingUp, User, 
+  CheckCircle, AlertCircle 
+} from 'lucide-react';
+import { authService, courseService } from '../services/api';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -13,6 +16,10 @@ function Dashboard() {
     progresoPromedio: 0
   });
   const [loading, setLoading] = useState(true);
+  
+  // --- AÑADIDO ---
+  // Para mostrar mensajes de éxito/error al inscribirse
+  const [message, setMessage] = useState(''); 
 
   useEffect(() => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
@@ -31,22 +38,19 @@ function Dashboard() {
     try {
       setLoading(true);
       
-      // Cargar cursos y estadísticas en paralelo
-      const [coursesResponse, statsResponse] = await Promise.all([
-        courseService.getAllCourses(),
-        courseService.getUserStats()
-      ]);
+      // 1. Llamamos a la función con el nombre correcto: getAll()
+      const coursesData = await courseService.getAll();
 
-      if (coursesResponse.success) {
-        setCourses(coursesResponse.courses);
-      }
+      // 2. 'coursesData' ES el array, así que lo asignamos directamente
+      setCourses(coursesData);
 
-      if (statsResponse.success) {
-        setStats(statsResponse.stats);
-      }
+      // --- NOTA ---
+      // La parte de 'getUserStats' aún no está implementada en el backend.
+      // La dejaremos pendiente por ahora.
 
     } catch (error) {
       console.error('Error al cargar datos:', error);
+      setMessage('Error al cargar los cursos.');
     } finally {
       setLoading(false);
     }
@@ -58,17 +62,21 @@ function Dashboard() {
     navigate('/');
   };
 
-  const handleStartCourse = async (cursoId) => {
+  // --- ¡FUNCIÓN ACTUALIZADA! ---
+  // Esta es la función que creamos para inscribirse
+  const handleEnroll = async (courseId) => {
     try {
-      const response = await courseService.startCourse(cursoId);
-      if (response.success) {
-        alert('¡Curso iniciado! Funcionalidad completa próximamente.');
-        // Recargar estadísticas
-        loadData();
-      }
+      // Llama al servicio de API
+      const response = await courseService.enroll(courseId);
+      setMessage(response.message); // "¡Inscripción exitosa!"
+      
+      // Limpiamos el mensaje después de 3 segundos
+      setTimeout(() => setMessage(''), 3000);
+
     } catch (error) {
-      console.error('Error al iniciar curso:', error);
-      alert('Error al iniciar el curso');
+      // Muestra el error de "Ya estás inscrito"
+      setMessage(error.response?.data?.message || 'Error al inscribirse.');
+      setTimeout(() => setMessage(''), 3000);
     }
   };
 
@@ -125,16 +133,16 @@ function Dashboard() {
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards (Aún no funcionales, pero visualmente listas) */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-xl shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <BookOpen className="w-8 h-8 text-blue-600" />
               <span className="text-2xl font-bold text-gray-900">
-                {stats.cursosCompletados}/{stats.totalCursos}
+                {stats.cursosCompletados}/{courses.length}
               </span>
             </div>
-            <h3 className="text-gray-600 font-medium">Cursos Completados</h3>
+            <h3 className="text-gray-600 font-medium">Cursos Disponibles</h3>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-lg">
@@ -163,6 +171,14 @@ function Dashboard() {
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
             Cursos Disponibles
           </h2>
+
+          {/* --- MENSAJE DE ÉXITO/ERROR AÑADIDO --- */}
+          {message && (
+            <div className={`p-4 mb-4 rounded ${message.includes('Error') || message.includes('inscrito') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+              {message.includes('Error') || message.includes('inscrito') ? <AlertCircle className="inline w-5 h-5 mr-2"/> : <CheckCircle className="inline w-5 h-5 mr-2"/>}
+              {message}
+            </div>
+          )}
           
           {courses.length === 0 ? (
             <p className="text-gray-600 text-center py-8">
@@ -172,23 +188,30 @@ function Dashboard() {
             <div className="grid md:grid-cols-2 gap-6">
               {courses.map((course) => (
                 <div 
-                  key={course.id} 
-                  className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition"
+                  // --- CORREGIDO ---
+                  // Cambiado de 'course.id' a 'course.curso_id' para que coincida con la BD
+                  key={course.curso_id} 
+                  className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition flex flex-col justify-between"
                 >
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {course.titulo}
-                  </h3>
-                  <p className="text-gray-600 mb-4">{course.descripcion}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex space-x-4 text-sm text-gray-500">
-                      <span>⏱️ {course.duracion}</span>
-                      <span>📊 {course.nivel}</span>
-                    </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      {course.titulo}
+                    </h3>
+                    {/* --- AÑADIDO ---
+                    // 'instructor' viene de la API que creamos */}
+                    <p className="text-sm text-gray-500 mb-2">Impartido por: {course.instructor}</p>
+                    <p className="text-gray-600 mb-4">{course.descripcion}</p>
+                  </div>
+                  
+                  {/* --- CORREGIDO ---
+                  // Quité 'duracion' y 'nivel' porque no están en la BD
+                  // El botón ahora llama a handleEnroll con el ID correcto */}
+                  <div className="flex items-center justify-end">
                     <button 
-                      onClick={() => handleStartCourse(course.id)}
+                      onClick={() => handleEnroll(course.curso_id)}
                       className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-semibold"
                     >
-                      Comenzar
+                      Inscribirme Ahora
                     </button>
                   </div>
                 </div>

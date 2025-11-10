@@ -138,7 +138,7 @@ function AuthPage() {
               className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-md hover:shadow-xl transition-all"
             >
               <Home className="w-4 h-4" />
-              <span>Dashboard</span>
+              <span>Inicio</span>
             </motion.button>
           </div>
         </div>

@@ -1,172 +1,91 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const db = require('../config/database');
+import pool from '../config/database.js'; // Importa la conexión
+import bcrypt from 'bcryptjs'; // Para comparar contraseñas
+import jwt from 'jsonwebtoken'; // Para crear el token
+import dotenv from 'dotenv';
 
-// Registro de usuario
-exports.register = async (req, res) => {
+dotenv.config({ path: '../.env' });
+
+// Función de Registro (La necesitarás pronto)
+export const register = async (req, res) => {
+  const { nombre, email, password } = req.body;
+
   try {
-    const { nombre, email, password } = req.body;
-
-    // Validaciones
-    if (!nombre || !email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Todos los campos son requeridos' 
-      });
+    // 1. Verificar si el usuario ya existe
+    const [userExists] = await pool.query('SELECT * FROM usuarios WHERE email = ?', [email]);
+    if (userExists.length > 0) {
+      return res.status(400).json({ success: false, message: 'El correo ya está registrado' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'La contraseña debe tener al menos 6 caracteres' 
-      });
-    }
+    // 2. Hashear la contraseña
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Verificar si el email ya existe
-    const [existingUser] = await db.query(
-      'SELECT id FROM usuarios WHERE email = ?',
-      [email]
-    );
-
-    if (existingUser.length > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Este correo ya está registrado' 
-      });
-    }
-
-    // Encriptar contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insertar usuario
-    const [result] = await db.query(
+    // 3. Insertar en la BD
+    const [newUser] = await pool.query(
       'INSERT INTO usuarios (nombre, email, password) VALUES (?, ?, ?)',
       [nombre, email, hashedPassword]
     );
 
-    // Generar token
-    const token = jwt.sign(
-      { id: result.insertId, email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    // (Opcional) Crear token al registrar
+    const token = jwt.sign({ id: newUser.insertId }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
     res.status(201).json({
       success: true,
-      message: 'Usuario registrado exitosamente',
-      token,
-      user: {
-        id: result.insertId,
-        nombre,
-        email
-      }
+      message: 'Usuario registrado con éxito',
+      token
     });
 
   } catch (error) {
-    console.error('Error en registro:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error en el servidor' });
   }
 };
 
-// Login de usuario
-exports.login = async (req, res) => {
+
+// --- Función de LOGIN (La que quieres probar) ---
+export const login = async (req, res) => {
+  const { email, password } = req.body;
+
   try {
-    const { email, password } = req.body;
+    // 1. Buscar al usuario por email
+    const [users] = await pool.query('SELECT * FROM usuarios WHERE email = ?', [email]);
 
-    // Validaciones
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email y contraseña son requeridos' 
-      });
-    }
-
-    // Buscar usuario
-    const [users] = await db.query(
-      'SELECT id, nombre, email, password FROM usuarios WHERE email = ?',
-      [email]
-    );
-
+    // 2. Si no existe, enviar error
     if (users.length === 0) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Credenciales incorrectas' 
-      });
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
     }
 
     const user = users[0];
 
-    // Verificar contraseña
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    // 3. Comparar la contraseña del formulario con la hasheada de la BD
+    const isMatch = await bcrypt.compare(password, user.password);
 
-    if (!isValidPassword) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Credenciales incorrectas' 
-      });
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: 'Credenciales inválidas' });
     }
 
-    // Actualizar último acceso
-    await db.query(
-      'UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = ?',
-      [user.id]
-    );
-
-    // Generar token
+    // 4. Si todo es correcto, crear un Token (JWT)
     const token = jwt.sign(
-      { id: user.id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { id: user.usuario_id, rol: user.rol }, // Info que guardas en el token
+      process.env.JWT_SECRET, // Necesitas una clave secreta en tu .env
+      { expiresIn: '1h' } // El token expira en 1 hora
     );
 
+    // 5. Enviar la respuesta exitosa
     res.json({
       success: true,
-      message: 'Login exitoso',
-      token,
-      user: {
-        id: user.id,
+      message: '¡Bienvenido de nuevo!',
+      token: token,
+      user: { // Enviamos los datos del usuario (sin el password)
+        id: user.usuario_id,
         nombre: user.nombre,
-        email: user.email
+        email: user.email,
+        rol: user.rol
       }
     });
 
   } catch (error) {
-    console.error('Error en login:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
-  }
-};
-
-// Obtener perfil del usuario
-exports.getProfile = async (req, res) => {
-  try {
-    const [users] = await db.query(
-      'SELECT id, nombre, email, fecha_registro, ultimo_acceso FROM usuarios WHERE id = ?',
-      [req.userId]
-    );
-
-    if (users.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Usuario no encontrado' 
-      });
-    }
-
-    res.json({
-      success: true,
-      user: users[0]
-    });
-
-  } catch (error) {
-    console.error('Error al obtener perfil:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error en el servidor' 
-    });
+    console.error('Error en el login:', error);
+    res.status(500).json({ success: false, message: 'Error en el servidor' });
   }
 };

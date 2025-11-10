@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Backend para Plataforma Ética en IA",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
@@ -10,16 +11,17 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "TSC",
   "dependencies": {
-    "bcryptjs": "^3.0.2",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.1.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.15.3"
+    "multer": "^2.0.2",
+    "mysql2": "^3.6.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.0.1"
   }
 }
