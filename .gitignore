@@ -1,0 +1,50 @@
+# ---------------------------------
+# DEPENDENCIAS (¡Lo más importante!)
+# ---------------------------------
+node_modules/
+**/node_modules/
+
+# ---------------------------------
+# SEGURIDAD Y ENTORNO
+# ---------------------------------
+.env
+.env.local
+.env.*
+*.env
+
+# ---------------------------------
+# BUILD Y DISTRIBUCIÓN (Frontend)
+# ---------------------------------
+dist/
+dist-ssr/
+build/
+.vite/
+
+# ---------------------------------
+# BACKEND & ARCHIVOS GENERADOS
+# ---------------------------------
+# Carpeta de subidas de archivos (PDFs, imágenes)
+uploads/
+backend/uploads/
+
+# Logs de errores
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---------------------------------
+# SISTEMA OPERATIVO Y EDITORES
+# ---------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs
+*.njsproj
+*.sln
+*.sw?
